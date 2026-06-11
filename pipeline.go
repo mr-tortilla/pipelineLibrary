@@ -22,9 +22,10 @@ func (p *Pipeline) Add(nodes ...Node) {
 	p.nodes = append(p.nodes, nodes...)
 }
 
-// Run запускает все ноды конкурентно
+// Exec запускает все ноды конкурентно
 // Отмена ctx сообщит нодам об остановке
-func (p *Pipeline) Run(ctx context.Context) {
+func (p *Pipeline) Exec(ctx context.Context) {
+	ctx, p.cancel = context.WithCancel(ctx)
 	for _, node := range p.nodes {
 		p.wg.Add(1)
 		go func(n Node) {

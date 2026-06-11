@@ -68,7 +68,7 @@ p.Add(nodeA, nodeB, nodeC)
 ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 defer cancel()
 
-p.Run(ctx)
+p.Exec(ctx)
 p.Wait()
 ```
 

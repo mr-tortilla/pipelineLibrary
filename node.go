@@ -2,8 +2,10 @@ package pipeline
 
 import "context"
 
-// Node - логическая единица в пайплайне
-// Может принимать каналы для входных данных и выходных
+// Node представляет единицу обработки данных в пайплайне.
+// Библиотека передаёт каналы через SetInputs и SetOutputs перед запуском.
 type Node interface {
 	Run(ctx context.Context)
+	SetInputs(inputs []chan any)
+	SetOutputs(outputs []chan any)
 }

@@ -16,12 +16,12 @@ go get github.com/mr-tortilla/pipelineLibrary
 
 Пайплайн - это направленный граф из нод. Каждая нода читает данные из входных каналов,
 обрабатывает их и пишет результат в выходные каналы. Ноды выполняются параллельно.
+Библиотека берёт на себя создание горутин, синхронизацию и закрытие каналов.
 
-Библиотека предоставляет три строительных блока:
+Библиотека предоставляет два строительных блока:
 
 - **Node** - интерфейс который должна реализовать каждая нода
-- **Pipeline** - запускает ноды и управляет их жизненным циклом
-- **NodeGroup** - запускает группу нод параллельно и вызывает колбэк когда все завершились
+- **Pipeline** - соединяет ноды, запускает их и управляет жизненным циклом каналов
 
 ## Использование
 
@@ -29,40 +29,44 @@ go get github.com/mr-tortilla/pipelineLibrary
 
 ```go
 type MyNode struct {
-    In  <-chan string
-    Out chan<- string
+    inputs  []chan any
+    outputs []chan any
 }
 
+func (n *MyNode) SetInputs(inputs []chan any)   { n.inputs = inputs }
+func (n *MyNode) SetOutputs(outputs []chan any) { n.outputs = outputs }
+
 func (n *MyNode) Run(ctx context.Context) {
+    in  := n.inputs[0]
+    out := n.outputs[0]
+
     for {
         select {
         case <-ctx.Done():
             return
-        case val, ok := <-n.In:
+        case val, ok := <-in:
             if !ok {
                 return
             }
-            n.Out <- process(val)
+            out <- process(val.(string))
         }
     }
 }
 ```
 
-### 2. Соедините ноды каналами
+### 2. Соедините ноды и запустите пайплайн
 
 ```go
-ch1 := make(chan string)
-ch2 := make(chan string)
+ch1 := make(chan any)
+ch2 := make(chan any)
 
-nodeA := &MyNode{Out: ch1}
-nodeB := &MyNode{In: ch1, Out: ch2}
-nodeC := &MyNode{In: ch2}
-```
+nodeA := &MyNode{}
+nodeB := &MyNode{}
+nodeC := &MyNode{}
 
-### 3. Запустите пайплайн
-
-```go
-p := pipeline.New()
+p := pipeline.NewPipeline()
+p.Connect(nodeA, nodeB, ch1)
+p.Connect(nodeB, nodeC, ch2)
 p.Add(nodeA, nodeB, nodeC)
 
 ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
@@ -72,20 +76,19 @@ p.Exec(ctx)
 p.Wait()
 ```
 
-### Параллельное выполнение через NodeGroup
+### Параллельное выполнение
+
+Для параллельной обработки передайте один канал нескольким нодам:
 
 ```go
-out := make(chan Result)
+ch := make(chan any)
 
-group := pipeline.NewNodeGroup(
-    func() { close(out) }, // вызывается когда все ноды завершились
-    &WorkerNode{Out: out},
-    &WorkerNode{Out: out},
-    &WorkerNode{Out: out},
-)
-
-p.Add(group)
+p.Connect(source, worker1, ch)
+p.Connect(source, worker2, ch)
+p.Connect(source, worker3, ch)
 ```
+
+Go автоматически распределяет значения из канала между свободными воркерами.
 
 ### Остановка
 
